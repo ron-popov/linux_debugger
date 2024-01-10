@@ -43,11 +43,16 @@ int main( int argc, char *argv[] )  {
     }
 
     // Check current instruction
-    
+
 
 
     // Detach from process
-    // long ptrace_detach_return_value
+    long ptrace_detach_return_value = ptrace(PTRACE_DETACH, debugged_process_pid, 0);
+    if(ptrace_detach_return_value == -1) {
+        printf("[x] An error occured in PTRACE_DETACH: %s\n", strerror(errno));
+    } else {
+        printf("[-] PTRACE_DETACH return value: %ld\n", ptrace_detach_return_value);
+    }
 
     return 0;
 }
