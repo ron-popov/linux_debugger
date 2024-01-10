@@ -1,8 +1,12 @@
-debugger: clean main.c
+.PHONY: tests
+
+debugger: main.c
+	rm -rf debugger
 	gcc main.c -o debugger
 
-tests: tests/simple_loop.s clean
-	gcc -nostdlib tests/simple_loop.s -o ./tests/simple_loop
+tests: tests/simple_loop.s
+	rm -rf tests/simple_loop
+	gcc -nostdlib tests/simple_loop.s -o tests/simple_loop
 
 clean:
 	rm -rf debugger
