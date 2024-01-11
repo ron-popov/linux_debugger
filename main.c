@@ -120,7 +120,6 @@ int main( int argc, char *argv[] )  {
                     printf("[x] An error occured in finding current instrucion: %s\n", strerror(errno));
                     continue;
                 } else {
-                    // printf("[-] PTRACE_PEEKDATA for current instruction return value: 0x%08lx\n", instructions);
                     printf(
                         "0x%08lx - 0x%02X 0x%02X 0x%02X 0x%02X\n", 
                         targer_addr, 
@@ -128,7 +127,7 @@ int main( int argc, char *argv[] )  {
                         (unsigned int) (instructions % 0x010000 / 0x0100),
                         (unsigned int) (instructions % 0x01000000 / 0x010000),
                         (unsigned int) (instructions % 0x0100000000 / 0x01000000)
-                        );
+                    );
                 }
 
             }
