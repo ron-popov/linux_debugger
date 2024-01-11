@@ -20,30 +20,9 @@ int main( int argc, char *argv[] )  {
         return 0;
     }
 
-    char raw_user_input[STRING_MAX_LEN];
-
     long unsigned int working_pid = 0;
 
-    if (argc == 2) {
-        unsigned long debugged_process_pid = atoi(argv[1]);
-        printf("[-] Debugged process PID: %ld\n", debugged_process_pid);
-
-        if (debugged_process_pid == 0) {
-            printf("[X] Invalid pid provided in cli argument\n");
-            return 0;
-        }
-
-        long attach_ret_val = ptrace(PTRACE_ATTACH, debugged_process_pid, 0, 0);
-        if(attach_ret_val == -1) {
-            printf("[X] An error occured in PTRACE_ATTACH: %s\n", strerror(errno));
-            return 0;
-        }
-
-        printf("[-] Attach return value: %ld\n", attach_ret_val);
-        printf("[V] Attached succesfully!\n");
-        working_pid = debugged_process_pid;
-    }
-
+    char raw_user_input[STRING_MAX_LEN];
     printf("[-] Type \"exit\" to exit\n");
 
     // Get user input
@@ -71,6 +50,7 @@ int main( int argc, char *argv[] )  {
             printf("  attach <pid>      - attaches to the specified\n");
             printf("  detach            - detach from currently attached process\n");
             printf("  diss              - Print instruction pointer and current instructions\n");
+            printf("  run <program>     - Run a program and attach self to it\n");
             printf("\n");
 
         } else if (equals(debugger_command, "attach")) {
@@ -95,6 +75,49 @@ int main( int argc, char *argv[] )  {
                 printf("[V] Detached succesfully!\n");
                 working_pid = 0;
             }
+        } else if (equals(debugger_command, "run")) {
+            // Running strtok with null will continue off from the last strtok
+            char* shell_command = strtok(NULL, " ");
+
+            // Here we do strtok with NULL to continue parsing the last string 
+            // but with empty delimeter to reach the end of the string
+            char* arguments = strtok(NULL, "");
+            char *newargv[] = { NULL, arguments, NULL };
+
+
+            // printf("[-] Command to execute is : \"%s %s\"\n", shell_command, arguments);
+
+            // long execve_ret_val = execve(shell_command, newargv, NULL);
+            // printf("Execve return value : %ld\n", execve_ret_val);
+            // printf("Errno is : %s\n", strerror(errno));
+
+            long fork_ret_val = fork();
+
+            if (fork_ret_val == 0) {
+                // This is the forked process, i am not doing anything with the return value
+                // Because i have nothing to do with it (this is the forked process)
+
+                // TRACE_ME
+                long traceme_ret_val = ptrace(PTRACE_TRACEME);
+
+                // EXECVE
+                long execve_ret_val = execve(shell_command, newargv, NULL);
+
+            } else if (fork_ret_val == -1) {
+                printf("[X] Fork failed with errno : %d\n", errno);
+                continue;                
+            } else {
+                // This is the original flow
+
+                // Trace the process, it should have executed traceme so we could trace it
+                long attach_ret_val = ptrace(PTRACE_ATTACH, fork_ret_val, 0, 0);
+                if(attach_ret_val == -1)
+                    printf("[X] An error occured in PTRACE_ATTACH: %s\n", strerror(errno));
+                else {
+                    printf("[V] Attached succesfully!\n");
+                    working_pid = fork_ret_val;
+                }
+            }
 
         } else if (equals(debugger_command, "diss")) {
             // Make sure there is a process attached by the debugger
@@ -115,7 +138,7 @@ int main( int argc, char *argv[] )  {
             for(int i = 0; i < 8; i++) {
                 // Check current instruction
                 long targer_addr = debugged_process_ip + i*4;
-                long instructions = ptrace(PTRACE_PEEKDATA, working_pid, targer_addr, 0);
+                unsigned long instructions = ptrace(PTRACE_PEEKDATA, working_pid, targer_addr, 0);
                 if(instructions == -1) {
                     printf("[x] An error occured in finding current instrucion: %s\n", strerror(errno));
                     continue;
