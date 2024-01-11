@@ -53,3 +53,8 @@ dkms.conf
 
 # VSCode directory
 .vscode/
+
+
+# Debugger stuff
+debugger
+tests/simple_loop
