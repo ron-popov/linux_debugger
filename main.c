@@ -43,6 +43,12 @@ int main( int argc, char *argv[] )  {
     }
 
     // Check current instruction
+    long current_instruction = ptrace(PTRACE_PEEKDATA, debugged_process_pid, debugged_process_ip, 0);
+    if(current_instruction == -1) {
+        printf("[x] An error occured in PTRACE_PEEKDATA: %s\n", strerror(errno));
+    } else {
+        printf("[-] PTRACE_PEEKDATA return value: 0x%08lx\n", current_instruction);
+    }
 
 
 
