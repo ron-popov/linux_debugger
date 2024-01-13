@@ -58,3 +58,4 @@ dkms.conf
 # Debugger stuff
 debugger
 tests/simple_loop
+tests/hello_world

@@ -8,7 +8,7 @@
 
 #define STRING_MAX_LEN 1024
 
-#define equals(debugger_command,b) strcmp(debugger_command,b) == 0
+#define equals(a,b) strcmp(a,b) == 0
 
 int main( int argc, char *argv[] )  {
     printf("--- Linux debugger init ---\n");
@@ -35,12 +35,13 @@ int main( int argc, char *argv[] )  {
         }
 
         fgets(raw_user_input, STRING_MAX_LEN, stdin);
-
         
         char* user_input = strtok(raw_user_input, "\n");
         char* debugger_command = strtok(user_input, " ");
 
-        if(equals(debugger_command, "exit")) {
+        if (debugger_command == NULL) {
+            continue;
+        } else if(equals(debugger_command, "exit")) {
             printf("[-] Leaving, bye!\n");
             return 0;
 
@@ -67,6 +68,11 @@ int main( int argc, char *argv[] )  {
             }
 
         } else if (equals(debugger_command, "detach")) {
+            if (working_pid == 0) {
+                printf("[X] Please attach debugger to a process before trying to detach!\n");
+                continue;
+            }
+
             long detach_ret_val = ptrace(PTRACE_DETACH, working_pid, 0, 0);
             if(detach_ret_val == -1)
                 printf("[X] An error occured in PTRACE_DETACH: %s\n", strerror(errno));
@@ -85,7 +91,7 @@ int main( int argc, char *argv[] )  {
             char *newargv[] = { NULL, arguments, NULL };
 
 
-            // printf("[-] Command to execute is : \"%s %s\"\n", shell_command, arguments);
+            printf("[-] Command to execute is : \"%s %s\"\n", shell_command, arguments);
 
             // long execve_ret_val = execve(shell_command, newargv, NULL);
             // printf("Execve return value : %ld\n", execve_ret_val);
@@ -94,29 +100,32 @@ int main( int argc, char *argv[] )  {
             long fork_ret_val = fork();
 
             if (fork_ret_val == 0) {
+                printf("This is forked\n");
                 // This is the forked process, i am not doing anything with the return value
                 // Because i have nothing to do with it (this is the forked process)
 
                 // TRACE_ME
-                long traceme_ret_val = ptrace(PTRACE_TRACEME);
+                // long traceme_ret_val = ptrace(PTRACE_TRACEME);
 
                 // EXECVE
-                long execve_ret_val = execve(shell_command, newargv, NULL);
+                // long execve_ret_val = execve(shell_command, newargv, NULL);
+                execve(shell_command, NULL, NULL);
 
             } else if (fork_ret_val == -1) {
                 printf("[X] Fork failed with errno : %d\n", errno);
-                continue;                
+                continue;
+
             } else {
                 // This is the original flow
 
                 // Trace the process, it should have executed traceme so we could trace it
-                long attach_ret_val = ptrace(PTRACE_ATTACH, fork_ret_val, 0, 0);
-                if(attach_ret_val == -1)
-                    printf("[X] An error occured in PTRACE_ATTACH: %s\n", strerror(errno));
-                else {
-                    printf("[V] Attached succesfully!\n");
-                    working_pid = fork_ret_val;
-                }
+                // long attach_ret_val = ptrace(PTRACE_ATTACH, fork_ret_val, 0, 0);
+                // if(attach_ret_val == -1)
+                //     printf("[X] An error occured in PTRACE_ATTACH: %s\n", strerror(errno));
+                // else {
+                //     printf("[V] Attached succesfully!\n");
+                //     working_pid = fork_ret_val;
+                // }
             }
 
         } else if (equals(debugger_command, "diss")) {
@@ -154,8 +163,6 @@ int main( int argc, char *argv[] )  {
                 }
 
             }
-
-            
         } else {
             printf("[X] Unknown command : \"%s\"\n", debugger_command);
         }

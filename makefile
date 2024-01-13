@@ -6,7 +6,8 @@ debugger: main.c
 
 tests: tests/simple_loop.s
 	rm -rf tests/simple_loop
-	gcc -nostdlib tests/simple_loop.s -o tests/simple_loop
+	gcc -no-pie -nostdlib tests/simple_loop.s -o tests/simple_loop
+	gcc -no-pie -nostdlib tests/hello_world.s -o tests/hello_world
 
 clean:
 	rm -rf debugger
