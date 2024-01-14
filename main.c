@@ -51,7 +51,8 @@ int main( int argc, char *argv[] )  {
             printf("  attach <pid>      - attaches to the specified\n");
             printf("  detach            - detach from currently attached process\n");
             printf("  diss              - Print instruction pointer and current instructions\n");
-            printf("  run <program>     - Run a program and attach self to it\n");
+            printf("  run <program>     - Run a program and attach self to it (doesn't actually start running yet, run \"cont\")\n");
+            printf("  cont              - Continue the program\n");
             printf("\n");
 
         } else if (equals(debugger_command, "attach")) {
