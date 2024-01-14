@@ -1,5 +1,5 @@
-#include <unistd.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
@@ -93,22 +93,20 @@ int main( int argc, char *argv[] )  {
 
             printf("[-] Command to execute is : \"%s %s\"\n", shell_command, arguments);
 
-            // long execve_ret_val = execve(shell_command, newargv, NULL);
-            // printf("Execve return value : %ld\n", execve_ret_val);
-            // printf("Errno is : %s\n", strerror(errno));
-
             long fork_ret_val = fork();
 
             if (fork_ret_val == 0) {
-                printf("This is forked\n");
                 // This is the forked process, i am not doing anything with the return value
                 // Because i have nothing to do with it (this is the forked process)
 
+                // Disable stdout for forked process
+                freopen("/dev/null", "w", stdout);
+
                 // TRACE_ME
-                // long traceme_ret_val = ptrace(PTRACE_TRACEME);
+                long traceme_ret_val = ptrace(PTRACE_TRACEME);
 
                 // EXECVE
-                // long execve_ret_val = execve(shell_command, newargv, NULL);
+                // TODO: Implement support for command line arguments
                 execve(shell_command, NULL, NULL);
 
             } else if (fork_ret_val == -1) {
@@ -119,13 +117,13 @@ int main( int argc, char *argv[] )  {
                 // This is the original flow
 
                 // Trace the process, it should have executed traceme so we could trace it
-                // long attach_ret_val = ptrace(PTRACE_ATTACH, fork_ret_val, 0, 0);
-                // if(attach_ret_val == -1)
-                //     printf("[X] An error occured in PTRACE_ATTACH: %s\n", strerror(errno));
-                // else {
-                //     printf("[V] Attached succesfully!\n");
-                //     working_pid = fork_ret_val;
-                // }
+                long attach_ret_val = ptrace(PTRACE_ATTACH, fork_ret_val, 0, 0);
+                if(attach_ret_val == -1)
+                    printf("[X] An error occured in PTRACE_ATTACH: %s\n", strerror(errno));
+                else {
+                    printf("[V] Attached succesfully!\n");
+                    working_pid = fork_ret_val;
+                }
             }
 
         } else if (equals(debugger_command, "diss")) {
@@ -163,6 +161,21 @@ int main( int argc, char *argv[] )  {
                 }
 
             }
+        } else if (equals(debugger_command, "cont")) {
+            // Make sure there is a process attached by the debugger
+            if (working_pid == 0) {
+                printf("[X] Please attach debugger to a process before trying to continue!\n");
+                continue;
+            }
+
+            long continue_ret_val = ptrace(PTRACE_CONT, working_pid, 0, 0);
+            if(continue_ret_val == -1) {
+                printf("[x] An error occured when trying to continue: %s\n", strerror(errno));
+                continue;
+            } else {
+                printf("[V] Continuing process\n");
+            }
+
         } else {
             printf("[X] Unknown command : \"%s\"\n", debugger_command);
         }
