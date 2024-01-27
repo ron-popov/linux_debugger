@@ -192,6 +192,8 @@ int main( int argc, char *argv[] )  {
                 printf("[X] Failed checking process status (failed to open /proc/pid/status)");
             }
 
+            free(pid_status_path);
+
             char* line = NULL;
             size_t len = 0;
             ssize_t read;
