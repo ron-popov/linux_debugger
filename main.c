@@ -176,6 +176,40 @@ int main( int argc, char *argv[] )  {
             } else {
                 printf("[V] Continuing process\n");
             }
+        } else if (equals(debugger_command, "status")) {
+            if (working_pid == 0) {
+                printf("[X] Please attach debugger to a process before checking status!\n");
+                continue;
+            }
+
+
+            char* pid_status_path = malloc(STRING_MAX_LEN);
+            if (sprintf(pid_status_path, "/proc/%ld/status", working_pid) == -1) {
+                printf("[X] Failed checking process status (failed to format /proc/pid/status path)");
+            }
+            FILE* pid_status_fd = fopen(pid_status_path, "r");
+            if (pid_status_fd == NULL) {
+                printf("[X] Failed checking process status (failed to open /proc/pid/status)");
+            }
+
+            char* line = NULL;
+            size_t len = 0;
+            ssize_t read;
+
+            // Status is on the third line
+            // getline twice to read third line
+            
+            getline(&line, &len, pid_status_fd);
+            getline(&line, &len, pid_status_fd);
+            read = getline(&line, &len, pid_status_fd);
+
+            if (read == -1) {
+                printf("[X] Failed checking process status (Failed to read /proc/pid/status)");
+            }
+
+            printf("[-] %s", line);
+
+            fclose(pid_status_fd);
 
         } else {
             printf("[X] Unknown command : \"%s\"\n", debugger_command);
