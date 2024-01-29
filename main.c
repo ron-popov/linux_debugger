@@ -8,6 +8,10 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 
+#include "lib/Zydis/Zydis.c"
+#include <inttypes.h>
+
+
 #define STRING_MAX_LEN 1024
 #define BREAKPOINT_OPCODE 0x33
 
@@ -88,7 +92,7 @@ int main( int argc, char *argv[] )  {
             printf("  help              - Display the help page\n");
             printf("  attach <pid>      - attaches to the specified\n");
             printf("  detach            - detach from currently attached process\n");
-            printf("  diss              - Print instruction pointer and current instructions\n");
+            printf("  diss_raw          - Print instruction pointer and opcodes (does not disassemble opcodes)\n");
             printf("  run <program>     - Run a program and attach self to it (doesn't actually start running yet, run \"cont\")\n");
             printf("  cont              - Continue the program\n");
             printf("\n");
@@ -166,7 +170,7 @@ int main( int argc, char *argv[] )  {
                 working_pid = fork_ret_val;
             }
 
-        } else if (equals(debugger_command, "diss")) {
+        } else if (equals(debugger_command, "diss_raw")) {
             // Make sure there is a process attached by the debugger
             if (working_pid == 0) {
                 printf("[X] Please attach debugger to a process before trying to disassemble!\n");
@@ -204,6 +208,68 @@ int main( int argc, char *argv[] )  {
                 }
 
             }
+        } else if (equals(debugger_command, "diss")) {
+            // Make sure there is a process attached by the debugger
+            if (working_pid == 0) {
+                printf("[X] Please attach debugger to a process before trying to disassemble!\n");
+                continue;
+            }
+
+
+            // Find value of RIP - instruction pointer
+            PID rip_addr_in_user_section = __builtin_offsetof(struct user, regs.rip);
+            QWORD debugged_process_ip = ptrace(PTRACE_PEEKUSER, working_pid, rip_addr_in_user_section, 0);
+            if(debugged_process_ip == -1) {
+                printf("[x] An error occured when finding RIP: %s\n", strerror(errno));
+                continue;
+            }
+
+            // Array of size 40 (decimal)
+            ZyanU8 data[] =
+            {
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+            };
+
+            // The runtime address (instruction pointer) was chosen arbitrarily here in order to better
+            // visualize relative addressing. In your actual program, set this to e.g. the memory address
+            // that the code being disassembled was read from.
+            ZyanU64 runtime_address = debugged_process_ip;
+
+            for(int i = 0; i < 10; i++) {
+                // Check current instruction
+                QWORD target_addr = debugged_process_ip + i*4;
+
+                QWORD read_result = ptrace(PTRACE_PEEKDATA, working_pid, target_addr, 0);
+
+                if(read_result == -1) {
+                    printf("[x] An error occured in finding current instrucion: %s\n", strerror(errno));
+                    continue;
+                } else {
+                    data[i*4 + 0] = (unsigned int) (read_result % 0x0100);
+                    data[i*4 + 1] = (unsigned int) (read_result % 0x010000 / 0x0100);
+                    data[i*4 + 2] = (unsigned int) (read_result % 0x01000000 / 0x010000);
+                    data[i*4 + 3] = (unsigned int) (read_result % 0x0100000000 / 0x01000000);
+                }
+            }
+
+            // Loop over the instructions in our buffer.
+            ZyanUSize offset = 0;
+            ZydisDisassembledInstruction instruction;
+            while (ZYAN_SUCCESS(ZydisDisassembleIntel(
+                /* machine_mode:    */ ZYDIS_MACHINE_MODE_LONG_64,
+                /* runtime_address: */ runtime_address,
+                /* buffer:          */ data + offset,
+                /* length:          */ sizeof(data) - offset,
+                /* instruction:     */ &instruction
+            ))) {
+                printf("%016" PRIX64 "  %s\n", runtime_address, instruction.text);
+                offset += instruction.info.length;
+                runtime_address += instruction.info.length;
+            }
+
         } else if (equals(debugger_command, "break")) {
             // Make sure there is a process attached by the debugger
             if (working_pid == 0) {
