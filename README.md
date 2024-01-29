@@ -1,6 +1,6 @@
 # Linux Debugger
-### Building
-```sh
+### Building and Usage
+```bash
 make debugger
 
 sudo build/debugger
