@@ -101,10 +101,10 @@ int main( int argc, char *argv[] )  {
                 // Because i have nothing to do with it (this is the forked process)
 
                 // Disable stdout for forked process
-                freopen("/dev/null", "w", stdout);
+                // freopen("/dev/null", "w", stdout);
 
                 // TRACE_ME
-                long traceme_ret_val = ptrace(PTRACE_TRACEME);
+                long traceme_ret_val = ptrace(PTRACE_TRACEME, PTRACE_O_TRACEEXEC);                
 
                 // EXECVE
                 // TODO: Implement support for command line arguments
@@ -125,6 +125,11 @@ int main( int argc, char *argv[] )  {
                     printf("[V] Attached succesfully!\n");
                     working_pid = fork_ret_val;
                 }
+
+                long set_options_ret_val = ptrace(PTRACE_SETOPTIONS, fork_ret_val, 0, PTRACE_O_TRACEEXEC);
+                printf("[-] PTRACE SETOPTIONS return val : %d\n", set_options_ret_val);
+
+                printf("[x] An error occured when settings ptrace options: %s\n", strerror(errno));
             }
 
         } else if (equals(debugger_command, "diss")) {
