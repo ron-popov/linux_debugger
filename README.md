@@ -14,7 +14,7 @@ run build/hello_world
 diss
 
 # Set a breakpoint
-break 0x401010
+break 0x40101C
 
 # Continue the flow of the program
 cont

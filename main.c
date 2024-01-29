@@ -12,6 +12,7 @@
 #include <inttypes.h>
 
 
+#define MAX_BREAKPOINTS 16
 #define STRING_MAX_LEN 1024
 #define BREAKPOINT_OPCODE 0x33
 
@@ -22,6 +23,7 @@ typedef unsigned long long ADDR;
 typedef unsigned char BYTE;
 typedef unsigned long long QWORD;
 
+// --- MEMORY STUFF ---
 BYTE read_mem(PID pid, ADDR addr) {
     QWORD result = ptrace(PTRACE_PEEKDATA, pid, addr, 0);
 
@@ -52,6 +54,31 @@ void write_mem(PID pid, ADDR addr, BYTE value) {
 
 }
 
+
+// --- BREAKPOINTS ---
+void add_breakpoint(ADDR (*breakpoints)[MAX_BREAKPOINTS], ADDR addr) {
+    for (int i = 0; i < MAX_BREAKPOINTS; i++) {
+        if (*breakpoints[i] == 0) {
+            *breakpoints[i] = addr;
+            return;
+        }
+    }
+
+    printf("[X] Cannot add anymore breakpoints\n");
+}
+
+bool is_breakpoint(ADDR (*breakpoints)[MAX_BREAKPOINTS], ADDR addr) {
+    for (int i = 0; i < MAX_BREAKPOINTS; i++) {
+        // printf("Breakpoints[%d] = [%d]\n", i, *breakpoints[i]);
+        if (*breakpoints[i] == addr) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// --- MAIN ---
 int main( int argc, char *argv[] )  {
     printf("--- Linux debugger init ---\n");
 
@@ -63,6 +90,7 @@ int main( int argc, char *argv[] )  {
     }
 
     PID working_pid = 0;
+    ADDR breakpoints[MAX_BREAKPOINTS];
 
     char raw_user_input[STRING_MAX_LEN];
     printf("[-] Type \"exit\" to exit\n");
@@ -92,6 +120,7 @@ int main( int argc, char *argv[] )  {
             printf("  help              - Display the help page\n");
             printf("  attach <pid>      - attaches to the specified\n");
             printf("  detach            - detach from currently attached process\n");
+            printf("  diss              - Disassemble the instructions about to be executed \n");
             printf("  diss_raw          - Print instruction pointer and opcodes (does not disassemble opcodes)\n");
             printf("  run <program>     - Run a program and attach self to it (doesn't actually start running yet, run \"cont\")\n");
             printf("  cont              - Continue the program\n");
@@ -265,7 +294,12 @@ int main( int argc, char *argv[] )  {
                 /* length:          */ sizeof(data) - offset,
                 /* instruction:     */ &instruction
             ))) {
-                printf("%016" PRIX64 "  %s\n", runtime_address, instruction.text);
+                char* is_breakpoint_string = "";
+                if (is_breakpoint(&breakpoints, runtime_address)) {
+                    is_breakpoint_string = "-> ";
+                }
+
+                printf("0x%016" PRIX64 "  %s%s\n", runtime_address, is_breakpoint_string, instruction.text);
                 offset += instruction.info.length;
                 runtime_address += instruction.info.length;
             }
@@ -280,7 +314,9 @@ int main( int argc, char *argv[] )  {
             char* breakpoint_addr_string = strtok(NULL, " ");
             ADDR breakpoint_addr = strtol(breakpoint_addr_string, NULL, 0);
 
-            write_mem(working_pid, breakpoint_addr, BREAKPOINT_OPCODE);
+
+
+            // write_mem(working_pid, breakpoint_addr, BREAKPOINT_OPCODE);
         } else if (equals(debugger_command, "cont")) {
             // Make sure there is a process attached by the debugger
             if (working_pid == 0) {
