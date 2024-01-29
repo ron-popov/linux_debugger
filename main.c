@@ -163,14 +163,6 @@ int main( int argc, char *argv[] )  {
                 int wait_pid_status = 0;
 
                 waitpid(fork_ret_val, &wait_pid_status, 0);
-                printf("[-] waitpid status : %d\n", wait_pid_status);
-
-                if (!(WIFSTOPPED(wait_pid_status) && WSTOPSIG(wait_pid_status) == SIGTRAP)) {
-                    printf("[X] Process is in weird state...\n");
-                }
-
-                printf("[-] WIFSTOPPED : %d\n", WIFSTOPPED(wait_pid_status));
-                printf("[-] WSTOPSIG : %d\n", WSTOPSIG(wait_pid_status));
                 working_pid = fork_ret_val;
             }
 
@@ -194,9 +186,9 @@ int main( int argc, char *argv[] )  {
             for(int i = 0; i < 8; i++) {
                 // Check current instruction
                 QWORD target_addr = debugged_process_ip + i*4;
-                printf("[-] Reading addr : %d\n", target_addr);
 
                 QWORD instructions = ptrace(PTRACE_PEEKDATA, working_pid, target_addr, 0);
+
                 if(instructions == -1) {
                     printf("[x] An error occured in finding current instrucion: %s\n", strerror(errno));
                     continue;
@@ -220,7 +212,7 @@ int main( int argc, char *argv[] )  {
             }
 
             char* breakpoint_addr_string = strtok(NULL, " ");
-            ADDR breakpoint_addr = atoi(breakpoint_addr_string);
+            ADDR breakpoint_addr = strtol(breakpoint_addr_string, NULL, 0);
 
             write_mem(working_pid, breakpoint_addr, BREAKPOINT_OPCODE);
         } else if (equals(debugger_command, "cont")) {
@@ -237,6 +229,15 @@ int main( int argc, char *argv[] )  {
             } else {
                 printf("[V] Continuing process\n");
             }
+
+            int wait_pid_status = 0;
+
+            waitpid(working_pid, &wait_pid_status, 0);
+
+            if (WIFSTOPPED(wait_pid_status)) {
+                printf("[-] Process stopped with signal : %s\n", strsignal(WSTOPSIG(wait_pid_status)));
+            }
+            
         } else if (equals(debugger_command, "status")) {
             if (working_pid == 0) {
                 printf("[X] Please attach debugger to a process before checking status!\n");
