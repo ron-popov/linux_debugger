@@ -37,7 +37,9 @@ BYTE read_mem(PID pid, ADDR addr) {
 }
 
 void write_mem(PID pid, ADDR addr, BYTE value) {
+    // printf("[-] Writing in addr 0x%08X, value 0x%08X\n", addr, value);
     QWORD result = ptrace(PTRACE_PEEKDATA, pid, addr, 0);
+    printf("[-] Read in addr 0x%08X, value 0x%08X\n", addr, result);
 
     if(result == -1) {
         printf("[x] An error occured during read for write: %s\n", strerror(errno));
@@ -46,6 +48,8 @@ void write_mem(PID pid, ADDR addr, BYTE value) {
 
     result = result & 0xFFFFFF00;
     result += value;
+
+    printf("[-] Writing to addr 0x%08X, value 0x%08X\n", addr, result);
 
     QWORD write_mem_result = ptrace(PTRACE_POKEDATA, pid, addr, result);
     if (write_mem_result != 0) {
@@ -98,15 +102,16 @@ int main( int argc, char *argv[] )  {
 
         } else if (equals(debugger_command, "help")) {
             printf("\n--- Linux Debugger Help Page ---\n");
-            printf("  help              - Display the help page\n");
-            printf("  attach <pid>      - attaches to the specified\n");
-            printf("  detach            - detach from currently attached process\n");
-            printf("  diss              - Disassemble the instructions about to be executed \n");
-            printf("  diss_raw          - Print instruction pointer and opcodes (does not disassemble opcodes)\n");
-            printf("  run <program>     - Run a program and attach self to it (doesn't actually start running yet, run \"cont\")\n");
-            printf("  break <addr>      - Set a breakpoint in memory address specified\n");
-            printf("  clear             - Remove all breakpoints\n");
-            printf("  cont              - Continue the program\n");
+            printf("  help                  - Display the help page\n");
+            printf("  attach <pid>          - attaches to the specified\n");
+            printf("  detach                - detach from currently attached process\n");
+            printf("  diss                  - Disassemble the instructions about to be executed \n");
+            printf("  diss_raw              - Print opcodes in addr of INSTRUCTION POINTER\n");
+            printf("  diss_raw_addr <addr>  - Print opcodes in specified addr\n");
+            printf("  run <program>         - Run a program and attach self to it (doesn't actually start running yet, run \"cont\")\n");
+            printf("  break <addr>          - Set a breakpoint in memory address specified\n");
+            printf("  clear                 - Remove all breakpoints\n");
+            printf("  cont                  - Continue the program\n");
             printf("\n");
 
         } else if (equals(debugger_command, "attach")) {
@@ -182,6 +187,76 @@ int main( int argc, char *argv[] )  {
                 working_pid = fork_ret_val;
             }
 
+
+        } else if (equals(debugger_command, "diss_raw_addr")) {
+            if (working_pid == 0) {
+                printf("[X] Please attach debugger to a process before trying to set breakpoints!\n");
+                continue;
+            }
+
+            ;
+
+            printf(
+                "[-] Read in addr 0x%08X, value 0x%08X\n", 
+                0x401010,
+                ptrace(PTRACE_PEEKDATA, working_pid, 0x401010)
+            );
+
+            printf(
+                "[-] Read in addr 0x%08X, value 0x%08X\n", 
+                0x401012,
+                ptrace(PTRACE_PEEKDATA, working_pid, 0x401012)
+            );
+
+            printf(
+                "[-] Read in addr 0x%08X, value 0x%08X\n", 
+                0x401014,
+                ptrace(PTRACE_PEEKDATA, working_pid, 0x401014)
+            );
+
+            printf(
+                "[-] Read in addr 0x%08X, value 0x%08X\n", 
+                0x401018,
+                ptrace(PTRACE_PEEKDATA, working_pid, 0x401018)
+            );
+
+            printf(
+                "[-] Read in addr 0x%08X, value 0x%08X\n", 
+                0x40101c,
+                ptrace(PTRACE_PEEKDATA, working_pid, 0x40101c)
+            );
+            
+            printf(
+                "[-] Read in addr 0x%08X, value 0x%08X\n", 
+                0x401020,
+                ptrace(PTRACE_PEEKDATA, working_pid, 0x401020)
+            );
+
+            // Parse target memory addr to set breakpoint in
+            char* mem_addr_string = strtok(NULL, " ");
+            QWORD mem_addr = strtol(mem_addr_string, NULL, 0);
+            
+            for(int i = 0; i < 8; i++) {
+                // Check current instruction
+                QWORD target_addr = mem_addr + i*4;
+
+                QWORD instructions = ptrace(PTRACE_PEEKDATA, working_pid, target_addr, 0);
+
+                if(instructions == -1) {
+                    printf("[x] An error occured in finding current opcode: %s\n", strerror(errno));
+                    continue;
+                } else {
+                    printf(
+                        "0x%08lx - 0x%02X 0x%02X 0x%02X 0x%02X\n", 
+                        target_addr, 
+                        (unsigned int) (instructions % 0x0100), 
+                        (unsigned int) (instructions % 0x010000 / 0x0100),
+                        (unsigned int) (instructions % 0x01000000 / 0x010000),
+                        (unsigned int) (instructions % 0x0100000000 / 0x01000000)
+                    );
+                }
+            }
+
         } else if (equals(debugger_command, "diss_raw")) {
             // Make sure there is a process attached by the debugger
             if (working_pid == 0) {
@@ -218,8 +293,8 @@ int main( int argc, char *argv[] )  {
                         (unsigned int) (instructions % 0x0100000000 / 0x01000000)
                     );
                 }
-
             }
+
         } else if (equals(debugger_command, "diss")) {
             // Make sure there is a process attached by the debugger
             if (working_pid == 0) {
@@ -340,13 +415,21 @@ int main( int argc, char *argv[] )  {
                 continue;
             }
 
-            // Replace all memory addrs with breakpoints (opcode 0x33)
-            BYTE original_value = read_mem(working_pid, breakpoint_addr);
-            write_mem(working_pid, breakpoint_addr, OPCODE_BREAKPOINT);
+            if (breakpoint_addr != 0) {
+                // Replace all memory addrs with breakpoints (opcode 0x33)
+                write_mem(working_pid, breakpoint_addr, OPCODE_BREAKPOINT);
 
-            for(int i = 1; i < breakpoint_instruction_length; i++) {
-                write_mem(working_pid, breakpoint_addr + i, OPCODE_NOP);
+                for(int i = 1; i < breakpoint_instruction_length; i++) {
+                    write_mem(working_pid, breakpoint_addr + i, OPCODE_NOP);
+                }
+
+                printf(
+                    "[-] Read in addr 0x%08X, value 0x%02X\n", 
+                    breakpoint_addr + 4, 
+                    read_mem(working_pid, breakpoint_addr + 4)
+                );
             }
+
 
             // Actually continue the process
             QWORD continue_ret_val = ptrace(PTRACE_CONT, working_pid, 0, 0);

@@ -18,3 +18,14 @@ _start:
 
 	# Raise SIGTRAP
 	int $3
+
+	# write(1, message, 13) - this is for more stuff to happen after interrupt
+	mov     $1, %rax                # system call 1 is write
+	mov     $1, %rdi                # file handle 1 is stdout
+	mov     $message, %rsi          # address of string to output
+	mov     $13, %rdx               # number of bytes
+	syscall    
+
+message:
+        .ascii  "Hello, world\n"
+		
