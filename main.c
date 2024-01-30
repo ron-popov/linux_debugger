@@ -12,9 +12,10 @@
 #include <inttypes.h>
 
 
-#define MAX_BREAKPOINTS 16
 #define STRING_MAX_LEN 1024
-#define BREAKPOINT_OPCODE 0x33
+#define MAX_INSTRUCTION_LEN 16
+#define OPCODE_BREAKPOINT 0xCC
+#define OPCODE_NOP 0x90
 
 #define equals(a,b) strcmp(a,b) == 0
 
@@ -54,30 +55,6 @@ void write_mem(PID pid, ADDR addr, BYTE value) {
 
 }
 
-
-// --- BREAKPOINTS ---
-void add_breakpoint(ADDR (*breakpoints)[MAX_BREAKPOINTS], ADDR addr) {
-    for (int i = 0; i < MAX_BREAKPOINTS; i++) {
-        if (*breakpoints[i] == 0) {
-            *breakpoints[i] = addr;
-            return;
-        }
-    }
-
-    printf("[X] Cannot add anymore breakpoints\n");
-}
-
-bool is_breakpoint(ADDR (*breakpoints)[MAX_BREAKPOINTS], ADDR addr) {
-    for (int i = 0; i < MAX_BREAKPOINTS; i++) {
-        // printf("Breakpoints[%d] = [%d]\n", i, *breakpoints[i]);
-        if (*breakpoints[i] == addr) {
-            return true;
-        }
-    }
-    
-    return false;
-}
-
 // --- MAIN ---
 int main( int argc, char *argv[] )  {
     printf("--- Linux debugger init ---\n");
@@ -90,7 +67,11 @@ int main( int argc, char *argv[] )  {
     }
 
     PID working_pid = 0;
-    ADDR breakpoints[MAX_BREAKPOINTS];
+
+    // Breakpoint stuff
+    ADDR breakpoint_addr = 0;
+    BYTE breakpoint_instruction_length = 0;
+    BYTE[16] original_instruction;
 
     char raw_user_input[STRING_MAX_LEN];
     printf("[-] Type \"exit\" to exit\n");
@@ -123,6 +104,8 @@ int main( int argc, char *argv[] )  {
             printf("  diss              - Disassemble the instructions about to be executed \n");
             printf("  diss_raw          - Print instruction pointer and opcodes (does not disassemble opcodes)\n");
             printf("  run <program>     - Run a program and attach self to it (doesn't actually start running yet, run \"cont\")\n");
+            printf("  break <addr>      - Set a breakpoint in memory address specified\n");
+            printf("  clear             - Remove all breakpoints\n");
             printf("  cont              - Continue the program\n");
             printf("\n");
 
@@ -295,7 +278,7 @@ int main( int argc, char *argv[] )  {
                 /* instruction:     */ &instruction
             ))) {
                 char* is_breakpoint_string = "";
-                if (is_breakpoint(&breakpoints, runtime_address)) {
+                if (breakpoint_addr == runtime_address) {
                     is_breakpoint_string = "-> ";
                 }
 
@@ -312,11 +295,11 @@ int main( int argc, char *argv[] )  {
             }
 
             char* breakpoint_addr_string = strtok(NULL, " ");
-            ADDR breakpoint_addr = strtol(breakpoint_addr_string, NULL, 0);
+            breakpoint_addr = strtol(breakpoint_addr_string, NULL, 0);
 
 
 
-            // write_mem(working_pid, breakpoint_addr, BREAKPOINT_OPCODE);
+            // write_mem(working_pid, breakpoint_addr, OPCODE_BREAKPOINT);
         } else if (equals(debugger_command, "cont")) {
             // Make sure there is a process attached by the debugger
             if (working_pid == 0) {
@@ -324,6 +307,11 @@ int main( int argc, char *argv[] )  {
                 continue;
             }
 
+            // Replace all memory addrs with breakpoints (opcode 0x33)
+            BYTE original_value = read_mem(working_pid, breakpoint_addr);
+            write_mem(working_pid, breakpoint_addr, OPCODE_BREAKPOINT);
+
+            // Actually continue the process
             QWORD continue_ret_val = ptrace(PTRACE_CONT, working_pid, 0, 0);
             if(continue_ret_val == -1) {
                 printf("[x] An error occured when trying to continue: %s\n", strerror(errno));
@@ -333,7 +321,6 @@ int main( int argc, char *argv[] )  {
             }
 
             int wait_pid_status = 0;
-
             waitpid(working_pid, &wait_pid_status, 0);
 
             if (WIFSTOPPED(wait_pid_status)) {
