@@ -71,7 +71,7 @@ int main( int argc, char *argv[] )  {
     // Breakpoint stuff
     ADDR breakpoint_addr = 0;
     BYTE breakpoint_instruction_length = 0;
-    BYTE[16] original_instruction;
+    BYTE original_instruction[MAX_INSTRUCTION_LEN];
 
     char raw_user_input[STRING_MAX_LEN];
     printf("[-] Type \"exit\" to exit\n");
@@ -294,12 +294,45 @@ int main( int argc, char *argv[] )  {
                 continue;
             }
 
+            // Parse target memory addr to set breakpoint in
             char* breakpoint_addr_string = strtok(NULL, " ");
             breakpoint_addr = strtol(breakpoint_addr_string, NULL, 0);
+            
+            // Read original 16 bytes in that addr (max intel x86 instruction length is 15)
+            for(int i = 0; i < 4; i++) {
+                // Check current instruction
+                QWORD target_addr = breakpoint_addr + i*4;
 
+                QWORD read_result = ptrace(PTRACE_PEEKDATA, working_pid, target_addr, 0);
 
+                if(read_result == -1) {
+                    printf("[x] An error occured in finding memory in breakpoint addr : %s\n", strerror(errno));
+                    continue;
+                } else {
+                    original_instruction[i*4 + 0] = (unsigned int) (read_result % 0x0100);
+                    original_instruction[i*4 + 1] = (unsigned int) (read_result % 0x010000 / 0x0100);
+                    original_instruction[i*4 + 2] = (unsigned int) (read_result % 0x01000000 / 0x010000);
+                    original_instruction[i*4 + 3] = (unsigned int) (read_result % 0x0100000000 / 0x01000000);
+                }
+            }
 
-            // write_mem(working_pid, breakpoint_addr, OPCODE_BREAKPOINT);
+            ZyanU64 runtime_address = breakpoint_addr;
+
+            // Loop over the instructions in our buffer.
+            ZyanUSize offset = 0;
+            ZydisDisassembledInstruction instruction;
+            ZydisDisassembleIntel(
+                /* machine_mode:    */ ZYDIS_MACHINE_MODE_LONG_64,
+                /* runtime_address: */ runtime_address,
+                /* buffer:          */ original_instruction,
+                /* length:          */ MAX_INSTRUCTION_LEN,
+                /* instruction:     */ &instruction
+            );
+
+            breakpoint_instruction_length = instruction.info.length;
+            printf("[-] You are trying to break on an instruction of length %d\n", breakpoint_instruction_length);
+            printf("[-] %s\n", instruction.text);
+
         } else if (equals(debugger_command, "cont")) {
             // Make sure there is a process attached by the debugger
             if (working_pid == 0) {
@@ -310,6 +343,10 @@ int main( int argc, char *argv[] )  {
             // Replace all memory addrs with breakpoints (opcode 0x33)
             BYTE original_value = read_mem(working_pid, breakpoint_addr);
             write_mem(working_pid, breakpoint_addr, OPCODE_BREAKPOINT);
+
+            for(int i = 1; i < breakpoint_instruction_length; i++) {
+                write_mem(working_pid, breakpoint_addr + i, OPCODE_NOP);
+            }
 
             // Actually continue the process
             QWORD continue_ret_val = ptrace(PTRACE_CONT, working_pid, 0, 0);
