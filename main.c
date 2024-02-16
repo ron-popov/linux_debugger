@@ -195,44 +195,6 @@ int main( int argc, char *argv[] )  {
                 continue;
             }
 
-            ;
-
-            printf(
-                "[-] Read in addr 0x%08X, value 0x%08X\n", 
-                0x401010,
-                ptrace(PTRACE_PEEKDATA, working_pid, 0x401010)
-            );
-
-            printf(
-                "[-] Read in addr 0x%08X, value 0x%08X\n", 
-                0x401012,
-                ptrace(PTRACE_PEEKDATA, working_pid, 0x401012)
-            );
-
-            printf(
-                "[-] Read in addr 0x%08X, value 0x%08X\n", 
-                0x401014,
-                ptrace(PTRACE_PEEKDATA, working_pid, 0x401014)
-            );
-
-            printf(
-                "[-] Read in addr 0x%08X, value 0x%08X\n", 
-                0x401018,
-                ptrace(PTRACE_PEEKDATA, working_pid, 0x401018)
-            );
-
-            printf(
-                "[-] Read in addr 0x%08X, value 0x%08X\n", 
-                0x40101c,
-                ptrace(PTRACE_PEEKDATA, working_pid, 0x40101c)
-            );
-            
-            printf(
-                "[-] Read in addr 0x%08X, value 0x%08X\n", 
-                0x401020,
-                ptrace(PTRACE_PEEKDATA, working_pid, 0x401020)
-            );
-
             // Parse target memory addr to set breakpoint in
             char* mem_addr_string = strtok(NULL, " ");
             QWORD mem_addr = strtol(mem_addr_string, NULL, 0);
@@ -447,7 +409,27 @@ int main( int argc, char *argv[] )  {
             if (WIFSTOPPED(wait_pid_status)) {
                 printf("[-] Process stopped with signal : %s\n", strsignal(WSTOPSIG(wait_pid_status)));
             }
+
+            // --- FIXING BACK THE ORIGINAL MEMORY --- 
+            // Fetching register state
+            struct user_regs_struct regs;
+            ptrace(PTRACE_GETREGS, working_pid, NULL, &regs);
             
+            if(regs.rip < breakpoint_addr + breakpoint_instruction_length) {
+                printf("[X] Something weird happened :(\n");
+            }
+
+            // Reverting memory to before interrupt
+            for(int i = 0; i < breakpoint_instruction_length; i++) {
+                write_mem(working_pid, breakpoint_addr + i, original_instruction[i]);
+            }
+
+
+            // Jumping back to original breakpoint addr
+            regs.rip = breakpoint_addr;
+            ptrace(PTRACE_SETREGS, working_pid, NULL, &regs);
+
+
         } else if (equals(debugger_command, "status")) {
             if (working_pid == 0) {
                 printf("[X] Please attach debugger to a process before checking status!\n");
@@ -487,10 +469,10 @@ int main( int argc, char *argv[] )  {
 
         } else if (equals(debugger_command, "test")) {
             // Parse target memory addr to set breakpoint in
-            char* mem_addr_string = strtok(NULL, " ");
-            QWORD mem_addr = strtol(mem_addr_string, NULL, 0);
+            // char* mem_addr_string = strtok(NULL, " ");
+            // QWORD mem_addr = strtol(mem_addr_string, NULL, 0);
 
-            write_mem(working_pid, mem_addr, 0x00);
+            // write_mem(working_pid, mem_addr, 0x00);
         } else {
             printf("[X] Unknown command : \"%s\"\n", debugger_command);
         }
