@@ -23,10 +23,11 @@ typedef long unsigned int PID;
 typedef unsigned long long ADDR;
 typedef unsigned char BYTE;
 typedef unsigned long long QWORD;
+typedef uint64_t WORD;
 
 // --- MEMORY STUFF ---
 BYTE read_mem(PID pid, ADDR addr) {
-    QWORD result = ptrace(PTRACE_PEEKDATA, pid, addr, 0);
+    WORD result = ptrace(PTRACE_PEEKDATA, pid, addr, 0);
 
     if(result == -1) {
         printf("[x] An error occured during read for read: %s\n", strerror(errno));
@@ -38,7 +39,7 @@ BYTE read_mem(PID pid, ADDR addr) {
 
 void write_mem(PID pid, ADDR addr, BYTE value) {
     // printf("[-] Writing in addr 0x%08X, value 0x%08X\n", addr, value);
-    QWORD result = ptrace(PTRACE_PEEKDATA, pid, addr, 0);
+    WORD result = ptrace(PTRACE_PEEKDATA, pid, addr, 0);
     printf("[-] Read in addr 0x%08X, value 0x%08X\n", addr, result);
 
     if(result == -1) {
@@ -46,12 +47,12 @@ void write_mem(PID pid, ADDR addr, BYTE value) {
         exit(0);
     }
 
-    result = result & 0xFFFFFF00;
+    result = result & 0xFFFFFFFFFFFFFF00;
     result += value;
 
     printf("[-] Writing to addr 0x%08X, value 0x%08X\n", addr, result);
 
-    QWORD write_mem_result = ptrace(PTRACE_POKEDATA, pid, addr, result);
+    WORD write_mem_result = ptrace(PTRACE_POKEDATA, pid, addr, result);
     if (write_mem_result != 0) {
         printf("[x] An error occured during write for write: %s\n", strerror(errno));
         exit(0);
@@ -484,6 +485,12 @@ int main( int argc, char *argv[] )  {
 
             fclose(pid_status_fd);
 
+        } else if (equals(debugger_command, "test")) {
+            // Parse target memory addr to set breakpoint in
+            char* mem_addr_string = strtok(NULL, " ");
+            QWORD mem_addr = strtol(mem_addr_string, NULL, 0);
+
+            write_mem(working_pid, mem_addr, 0x00);
         } else {
             printf("[X] Unknown command : \"%s\"\n", debugger_command);
         }

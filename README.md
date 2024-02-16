@@ -12,8 +12,15 @@ run build/hello_world
 
 # Disassemble the code
 diss
+diss 0x40101C
+
+# Show opcodes in RIP
+diss_raw
+diss_raw_addr 0x40101C
+diss_raw_addr 0x401010
 
 # Set a breakpoint
+break 0x401010
 break 0x40101C
 
 # Continue the flow of the program
