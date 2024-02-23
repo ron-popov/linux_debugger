@@ -113,6 +113,7 @@ int main( int argc, char *argv[] )  {
             printf("  break <addr>          - Set a breakpoint in memory address specified\n");
             printf("  clear                 - Remove all breakpoints\n");
             printf("  cont                  - Continue the program\n");
+            // printf("  step                  - Step a single instruction\n");
             printf("\n");
 
         } else if (equals(debugger_command, "attach")) {
@@ -473,6 +474,21 @@ int main( int argc, char *argv[] )  {
             // QWORD mem_addr = strtol(mem_addr_string, NULL, 0);
 
             // write_mem(working_pid, mem_addr, 0x00);
+        } else if (equals(debugger_command, "step")) {
+            if (working_pid == 0) {
+                printf("[X] Please attach debugger to a process before checking status!\n");
+                continue;
+            }
+
+            QWORD step_ret_val = ptrace(PTRACE_SINGLESTEP, working_pid, 0, 0);
+
+            if(step_ret_val == -1) {
+                printf("[x] An error occured when trying to step: %s\n", strerror(errno));
+                continue;
+            } else {
+                printf("[V] Stepped single instruction\n");
+            }
+
         } else {
             printf("[X] Unknown command : \"%s\"\n", debugger_command);
         }
